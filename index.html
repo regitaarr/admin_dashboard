@@ -1,0 +1,989 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard Admin</title>
+
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
+    rel="stylesheet">
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              50: '#eef2ff',
+              100: '#e0e7ff',
+              500: '#6366f1',
+              600: '#4f46e5',
+              700: '#4338ca',
+              800: '#3730a3',
+              900: '#312e81',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- FontAwesome Icons CDN -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+
+  <!-- SheetJS (xlsx) CDN -->
+  <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+
+  <style>
+    /* Custom scrollbar styling */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: #f1f5f9;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+  </style>
+</head>
+
+<body class="bg-slate-50 text-slate-800 font-sans min-h-screen antialiased flex flex-col">
+
+  <!-- ================= NOTIFICATION TOAST ================= -->
+  <div id="toastContainer" class="fixed top-5 right-5 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none">
+  </div>
+
+  <!-- ================= AUTH VIEW: LOGIN & REGISTER FORMS ================= -->
+  <section id="loginSection"
+    class="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-indigo-900 via-slate-900 to-indigo-950">
+    <div class="w-full max-w-md bg-white rounded-2xl shadow-2xl p-6 sm:p-8 border border-slate-100 transition-all">
+      <!-- Logo & Header -->
+      <div class="text-center mb-6">
+        <div
+          class="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-indigo-600 text-white shadow-lg shadow-indigo-500/30 mb-3">
+          <i class="fa-solid fa-user-shield text-2xl"></i>
+        </div>
+        <h1 class="text-2xl font-bold text-slate-900 tracking-tight">MagangHub BPS Kota Banjar</h1>
+        <p class="text-xs sm:text-sm text-slate-500 mt-1">Portal Verifikasi & Rekapitulasi Presensi</p>
+      </div>
+
+      <!-- Tab Switcher (Masuk / Daftar) -->
+      <div class="flex p-1 bg-slate-100 rounded-xl mb-6">
+        <button type="button" id="tabBtnLogin"
+          class="flex-1 py-2 text-xs sm:text-sm font-bold rounded-lg transition-all shadow-sm bg-white text-indigo-700">
+          Masuk
+        </button>
+        <button type="button" id="tabBtnRegister"
+          class="flex-1 py-2 text-xs sm:text-sm font-bold rounded-lg transition-all text-slate-500 hover:text-slate-900">
+          Daftar Akun
+        </button>
+      </div>
+
+      <!-- Alert Box -->
+      <div id="authAlert" class="hidden mb-5 p-3.5 rounded-xl text-xs sm:text-sm flex items-start gap-2.5"></div>
+
+      <!-- 1. FORM LOGIN: EMAIL & KATA SANDI -->
+      <form id="loginForm" class="space-y-4">
+        <div>
+          <label for="loginEmail" class="block text-xs font-semibold uppercase text-slate-600 mb-1 tracking-wider">Email
+            Admin</label>
+          <div class="relative">
+            <span class="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-slate-400">
+              <i class="fa-regular fa-envelope text-sm"></i>
+            </span>
+            <input type="email" id="loginEmail" required placeholder="admin@maganghub.id"
+              class="w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition" />
+          </div>
+        </div>
+
+        <div>
+          <label for="loginPassword"
+            class="block text-xs font-semibold uppercase text-slate-600 mb-1 tracking-wider">Kata Sandi</label>
+          <div class="relative">
+            <span class="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-slate-400">
+              <i class="fa-solid fa-lock text-sm"></i>
+            </span>
+            <input type="password" id="loginPassword" required placeholder="Masukkan kata sandi..."
+              class="w-full pl-10 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition" />
+            <button type="button" id="btnToggleLoginPassword"
+              class="absolute inset-y-0 right-0 flex items-center pr-3.5 text-slate-400 hover:text-slate-600">
+              <i class="fa-regular fa-eye text-sm"></i>
+            </button>
+          </div>
+        </div>
+
+        <button type="submit" id="btnLoginSubmit"
+          class="w-full mt-2 py-3 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl text-sm shadow-lg shadow-indigo-600/30 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+          <span id="btnLoginText">Masuk ke Dashboard</span>
+          <i id="btnLoginSpinner" class="fa-solid fa-circle-notch fa-spin hidden"></i>
+        </button>
+
+        <p class="text-center text-xs text-slate-500 pt-2">
+          Belum punya akun?
+          <a href="#" id="linkSwitchToRegister" class="font-bold text-indigo-600 hover:underline">Daftar</a>
+        </p>
+      </form>
+
+      <!-- 2. FORM DAFTAR: NAMA, EMAIL, NO HP, KATA SANDI -->
+      <form id="registerForm" class="space-y-4 hidden">
+        <div>
+          <label for="regNama" class="block text-xs font-semibold uppercase text-slate-600 mb-1 tracking-wider">Nama
+            Lengkap</label>
+          <div class="relative">
+            <span class="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-slate-400">
+              <i class="fa-regular fa-user text-sm"></i>
+            </span>
+            <input type="text" id="regNama" required placeholder="Contoh: Budi Santoso"
+              class="w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition" />
+          </div>
+        </div>
+
+        <div>
+          <label for="regEmail" class="block text-xs font-semibold uppercase text-slate-600 mb-1 tracking-wider">Email
+            (ID Dokumen)</label>
+          <div class="relative">
+            <span class="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-slate-400">
+              <i class="fa-regular fa-envelope text-sm"></i>
+            </span>
+            <input type="email" id="regEmail" required placeholder="admin@maganghub.id"
+              class="w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition" />
+          </div>
+        </div>
+
+        <div>
+          <label for="regHp" class="block text-xs font-semibold uppercase text-slate-600 mb-1 tracking-wider">No.
+            Handphone</label>
+          <div class="relative">
+            <span class="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-slate-400">
+              <i class="fa-solid fa-phone text-sm"></i>
+            </span>
+            <input type="tel" id="regHp" required placeholder="0812xxxxxxxx"
+              class="w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition" />
+          </div>
+        </div>
+
+        <div>
+          <label for="regPassword" class="block text-xs font-semibold uppercase text-slate-600 mb-1 tracking-wider">Kata
+            Sandi</label>
+          <div class="relative">
+            <span class="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-slate-400">
+              <i class="fa-solid fa-lock text-sm"></i>
+            </span>
+            <input type="password" id="regPassword" required minlength="6" placeholder="Minimal 6 karakter..."
+              class="w-full pl-10 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition" />
+            <button type="button" id="btnToggleRegPassword"
+              class="absolute inset-y-0 right-0 flex items-center pr-3.5 text-slate-400 hover:text-slate-600">
+              <i class="fa-regular fa-eye text-sm"></i>
+            </button>
+          </div>
+        </div>
+
+        <button type="submit" id="btnRegSubmit"
+          class="w-full mt-2 py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl text-sm shadow-lg shadow-emerald-600/30 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+          <span id="btnRegText">Daftar & Masuk</span>
+          <i id="btnRegSpinner" class="fa-solid fa-circle-notch fa-spin hidden"></i>
+        </button>
+
+        <p class="text-center text-xs text-slate-500 pt-2">
+          Sudah punya akun?
+          <a href="#" id="linkSwitchToLogin" class="font-bold text-indigo-600 hover:underline">Masuk</a>
+        </p>
+      </form>
+    </div>
+  </section>
+
+  <!-- ================= DASHBOARD VIEW (SPA) ================= -->
+  <div id="dashboardSection" class="hidden min-h-screen flex flex-col md:flex-row bg-slate-50">
+
+    <!-- Mobile Sidebar Backdrop Overlay -->
+    <div id="sidebarBackdrop"
+      class="fixed inset-0 bg-slate-950/70 backdrop-blur-xs z-30 hidden md:hidden transition-opacity"></div>
+
+    <!-- SIDEBAR (Fixed Drawer on Mobile, Sticky Full-Height on PC) -->
+    <aside id="appSidebar"
+      class="fixed inset-y-0 left-0 z-40 w-72 bg-slate-900 text-slate-200 flex flex-col transition-all duration-300 ease-in-out -translate-x-full md:translate-x-0 md:sticky md:top-0 md:h-screen md:w-64 lg:w-72 shadow-2xl md:shadow-none flex-shrink-0 border-r border-slate-800">
+
+      <!-- Sidebar Brand Header -->
+      <div class="h-16 flex items-center justify-between px-5 border-b border-slate-800/80 bg-slate-900/90">
+        <div class="flex items-center gap-3">
+          <div
+            class="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-indigo-500 flex items-center justify-center text-white font-bold shadow-md shadow-indigo-600/30">
+            <i class="fa-solid fa-fingerprint text-lg"></i>
+          </div>
+          <div>
+            <span class="font-extrabold text-sm tracking-tight text-white block">MagangHub BPS Kota Banjar</span>
+            <span class="text-[10px] text-indigo-400 font-semibold uppercase tracking-wider block">Admin Panel</span>
+          </div>
+        </div>
+
+        <!-- Mobile close button inside sidebar drawer -->
+        <button id="btnCloseSidebarMobile"
+          class="md:hidden text-slate-400 hover:text-white p-1.5 rounded-xl hover:bg-slate-800 transition">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <!-- Admin Identity Card -->
+      <div class="p-3 mx-3 mt-3 rounded-2xl bg-slate-800/40 border border-slate-800/80">
+        <div class="flex items-center gap-3">
+          <div
+            class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-500 to-indigo-600 text-white shadow-sm flex items-center justify-center font-bold text-sm flex-shrink-0">
+            <span id="adminAvatarInitials">AD</span>
+          </div>
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center justify-between gap-1">
+              <p id="adminNameDisplay" class="text-xs font-bold text-white truncate">Admin User</p>
+              <span
+                class="inline-flex items-center gap-1 text-[9px] font-semibold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded-full flex-shrink-0">
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Online
+              </span>
+            </div>
+            <p id="adminEmailDisplay" class="text-[11px] text-slate-400 truncate mt-0.5">admin@maganghub.id</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Navigation Links -->
+      <nav class="flex-1 px-3 py-4 space-y-1.5 overflow-y-auto">
+        <div class="px-3 pt-1 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+          Menu Utama
+        </div>
+
+        <!-- 1. Presensi Harian -->
+        <a href="#presensi-harian" data-target="viewPresensiHarian"
+          class="nav-tab active flex items-center justify-between px-3.5 py-3 rounded-xl text-xs sm:text-sm font-semibold transition-all bg-indigo-600 text-white shadow-lg shadow-indigo-600/20">
+          <div class="flex items-center gap-3">
+            <i class="fa-solid fa-calendar-check text-base w-5 text-center"></i>
+            <span>Presensi Harian</span>
+          </div>
+          <i class="nav-chevron fa-solid fa-chevron-right text-[10px] opacity-100 text-white"></i>
+        </a>
+
+        <!-- 2. Persetujuan Izin/Sakit -->
+        <a href="#persetujuan" data-target="viewPersetujuan"
+          class="nav-tab flex items-center justify-between px-3.5 py-3 rounded-xl text-xs sm:text-sm font-medium text-slate-300 hover:bg-slate-800 hover:text-white transition-all">
+          <div class="flex items-center gap-3">
+            <i class="fa-solid fa-envelope-open-text text-base w-5 text-center"></i>
+            <span>Persetujuan Izin/Sakit</span>
+          </div>
+          <span id="badgePendingCount"
+            class="hidden px-2 py-0.5 text-[10px] font-bold rounded-full bg-amber-500 text-slate-950">0</span>
+        </a>
+
+        <!-- 3. Data Individu & Rekap -->
+        <a href="#rekap-individu" data-target="viewRekapIndividu"
+          class="nav-tab flex items-center justify-between px-3.5 py-3 rounded-xl text-xs sm:text-sm font-medium text-slate-300 hover:bg-slate-800 hover:text-white transition-all">
+          <div class="flex items-center gap-3">
+            <i class="fa-solid fa-chart-pie text-base w-5 text-center"></i>
+            <span>Data Individu & Rekap</span>
+          </div>
+          <i class="nav-chevron fa-solid fa-chevron-right text-[10px] opacity-0 text-slate-500"></i>
+        </a>
+
+        <!-- 4. Kelola Akun Peserta -->
+        <a href="#kelola-akun" data-target="viewKelolaAkun"
+          class="nav-tab flex items-center justify-between px-3.5 py-3 rounded-xl text-xs sm:text-sm font-medium text-slate-300 hover:bg-slate-800 hover:text-white transition-all">
+          <div class="flex items-center gap-3">
+            <i class="fa-solid fa-users-gear text-base w-5 text-center"></i>
+            <span>Kelola Akun Peserta</span>
+          </div>
+          <i class="nav-chevron fa-solid fa-chevron-right text-[10px] opacity-0 text-slate-500"></i>
+        </a>
+      </nav>
+
+      <!-- Sidebar Footer / Logout -->
+      <div class="p-3 border-t border-slate-800/80 bg-slate-950/40">
+        <button id="btnLogout"
+          class="w-full flex items-center justify-center gap-2.5 px-4 py-2.5 rounded-xl text-xs font-semibold text-rose-300 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 transition-all active:scale-95 shadow-sm">
+          <i class="fa-solid fa-arrow-right-from-bracket"></i>
+          <span>Keluar</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- MAIN CONTENT AREA -->
+    <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
+
+      <!-- TOP NAVIGATION BAR -->
+      <header
+        class="h-16 bg-white border-b border-slate-200/80 sticky top-0 z-20 px-4 sm:px-6 flex items-center justify-between shadow-xs">
+        <div class="flex items-center gap-3">
+          <!-- Toggle Sidebar Button (Bekerja di HP & PC) -->
+          <button id="btnToggleSidebar"
+            class="p-2 rounded-xl text-slate-600 hover:bg-slate-100 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
+            aria-label="Toggle Sidebar" title="Buka/Tutup Menu">
+            <i class="fa-solid fa-bars text-lg"></i>
+          </button>
+
+          <div>
+            <h2 id="topBarTitle" class="text-base sm:text-lg font-bold text-slate-900 leading-tight">Presensi Harian
+            </h2>
+            <p id="topBarSubtitle" class="text-[11px] text-slate-400 hidden sm:block">Pantau kehadiran magang secara
+              real-time</p>
+          </div>
+        </div>
+
+        <!-- Top Right Actions -->
+        <div class="flex items-center gap-3">
+          <div class="text-right hidden sm:block">
+            <span id="currentDateDisplay" class="text-xs font-medium text-slate-600 block"></span>
+            <span id="currentTimeDisplay" class="text-[11px] text-slate-400 font-mono"></span>
+          </div>
+          <button id="btnRefreshActiveView" title="Refresh Data"
+            class="p-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-indigo-600 transition text-sm">
+            <i class="fa-solid fa-arrows-rotate"></i>
+          </button>
+        </div>
+      </header>
+
+      <!-- VIEW CONTAINER (SPA Views) -->
+      <main class="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
+
+        <!-- Banner Peringatan Aturan Firestore (Otomatis Muncul jika read users diblokir) -->
+        <div id="firestorePermissionBanner"
+          class="hidden mb-6 p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 shadow-xs transition-all">
+          <div class="flex items-start gap-3">
+            <div
+              class="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center flex-shrink-0 mt-0.5">
+              <i class="fa-solid fa-triangle-exclamation text-base"></i>
+            </div>
+            <div class="flex-1 text-xs sm:text-sm">
+              <h4 class="font-bold text-amber-950 mb-0.5">Aturan Firestore Memblokir Relasi Nama Peserta</h4>
+              <p class="text-amber-800 leading-relaxed mb-2">
+                Aplikasi belum diizinkan membaca nama dari koleksi <code
+                  class="bg-amber-100/80 px-1.5 py-0.5 rounded font-mono font-semibold">users</code> karena aturan
+                Security Rules di Firebase Console. Oleh karena itu nama masih berstatus fallback NIK.
+              </p>
+              <div
+                class="bg-white/90 p-2.5 rounded-xl border border-amber-200 font-mono text-[11px] text-slate-800 space-y-1">
+                <span class="text-slate-500 font-sans font-semibold block text-[11px]">Buka Firebase Console > Firestore
+                  Database > Rules, pastikan terdapat aturan berikut:</span>
+                <span class="text-indigo-600 font-bold block">match /users/{userId} { allow read: if true; }</span>
+              </div>
+            </div>
+            <button type="button" onclick="document.getElementById('firestorePermissionBanner').classList.add('hidden')"
+              class="text-amber-600 hover:text-amber-900 p-1">
+              <i class="fa-solid fa-xmark text-sm"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- ================= VIEW 1: PRESENSI HARIAN ================= -->
+        <section id="viewPresensiHarian" class="spa-view block space-y-6">
+          <!-- Filter & Action Bar -->
+          <div
+            class="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div class="flex flex-wrap items-center gap-3">
+              <div>
+                <label for="filterTanggalPresensi"
+                  class="block text-[11px] font-bold uppercase text-slate-500 tracking-wider mb-1">Pilih Tanggal</label>
+                <input type="date" id="filterTanggalPresensi"
+                  class="px-3.5 py-2 text-xs sm:text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium" />
+              </div>
+              <div class="self-end">
+                <button id="btnFilterPresensiHarian"
+                  class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs sm:text-sm font-semibold transition shadow-sm flex items-center gap-2">
+                  <i class="fa-solid fa-filter"></i>
+                  <span>Terapkan</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Total counter today -->
+            <div class="flex items-center gap-2 text-xs text-slate-600">
+              <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span>Total Catatan Hari Ini: <strong id="countPresensiHariIni"
+                  class="text-slate-900 font-bold">0</strong></span>
+            </div>
+          </div>
+
+          <!-- Table Container with overflow-x-auto for Mobile Responsiveness -->
+          <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div class="overflow-x-auto">
+              <table class="w-full text-left border-collapse min-w-[640px]">
+                <thead>
+                  <tr
+                    class="bg-slate-50/80 border-b border-slate-200 text-slate-600 uppercase text-[11px] font-bold tracking-wider">
+                    <th class="py-3.5 px-4 sm:px-6">Nama Peserta</th>
+                    <th class="py-3.5 px-4">Tanggal</th>
+                    <th class="py-3.5 px-4 text-center">Jam Masuk</th>
+                    <th class="py-3.5 px-4 text-center">Jam Keluar</th>
+                    <th class="py-3.5 px-4 text-center">Status</th>
+                    <th class="py-3.5 px-4 sm:px-6 text-center">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody id="tableBodyPresensiHarian" class="divide-y divide-slate-100 text-xs sm:text-sm">
+                  <!-- Dynamic rows via JavaScript -->
+                  <tr>
+                    <td colspan="6" class="py-12 text-center text-slate-400">
+                      <i class="fa-solid fa-spinner fa-spin text-xl text-indigo-500 mb-2 block"></i>
+                      Memuat data presensi harian...
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ================= VIEW 2: PERSETUJUAN IZIN / SAKIT ================= -->
+        <section id="viewPersetujuan" class="spa-view hidden space-y-6">
+          <div
+            class="bg-amber-50 border border-amber-200/80 p-4 rounded-2xl text-amber-900 text-xs sm:text-sm flex items-start gap-3">
+            <i class="fa-solid fa-circle-exclamation text-amber-600 text-base mt-0.5"></i>
+            <div>
+              <p class="font-bold">Verifikasi Pengajuan Izin & Sakit</p>
+              <p class="text-amber-800 text-xs mt-0.5">Daftar presensi di bawah berstatus <span
+                  class="font-semibold underline">Pending</span>. Klik tombol <strong>ACC</strong> untuk menyetujui atau
+                <strong>Tolak</strong> jika tidak memenuhi syarat.
+              </p>
+            </div>
+          </div>
+
+          <!-- Table Persetujuan -->
+          <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div class="overflow-x-auto">
+              <table class="w-full text-left border-collapse min-w-[760px]">
+                <thead>
+                  <tr
+                    class="bg-slate-50/80 border-b border-slate-200 text-slate-600 uppercase text-[11px] font-bold tracking-wider">
+                    <th class="py-3.5 px-4 sm:px-6">Nama Peserta</th>
+                    <th class="py-3.5 px-4">Tanggal Izin</th>
+                    <th class="py-3.5 px-4 text-center">Kategori</th>
+                    <th class="py-3.5 px-4">Keterangan / Alasan</th>
+                    <th class="py-3.5 px-4 text-center">Foto Bukti</th>
+                    <th class="py-3.5 px-4 text-center">Status</th>
+                    <th class="py-3.5 px-4 sm:px-6 text-center">Tindakan</th>
+                  </tr>
+                </thead>
+                <tbody id="tableBodyPersetujuan" class="divide-y divide-slate-100 text-xs sm:text-sm">
+                  <!-- Dynamic rows via JavaScript -->
+                  <tr>
+                    <td colspan="7" class="py-12 text-center text-slate-400">
+                      <i class="fa-solid fa-spinner fa-spin text-xl text-indigo-500 mb-2 block"></i>
+                      Memeriksa pengajuan tertunda...
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ================= VIEW 3: DATA INDIVIDU & REKAP ================= -->
+        <section id="viewRekapIndividu" class="spa-view hidden space-y-6">
+          <!-- Search & Filter Card -->
+          <div class="bg-white p-4 sm:p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 sm:gap-4 items-end">
+              <!-- Cari Nama / NIK -->
+              <div class="sm:col-span-2 lg:col-span-4">
+                <label for="searchNamaPeserta"
+                  class="block text-xs font-bold uppercase text-slate-600 mb-1.5 tracking-wider">
+                  Cari Peserta Magang
+                </label>
+                <div class="relative">
+                  <span class="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-slate-400">
+                    <i class="fa-solid fa-magnifying-glass text-sm"></i>
+                  </span>
+                  <input type="text" id="searchNamaPeserta" placeholder="Ketik nama atau NIK..."
+                    class="w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition" />
+                </div>
+              </div>
+
+              <!-- Filter Dari Tanggal -->
+              <div class="lg:col-span-2">
+                <label for="filterRekapTglMulai"
+                  class="block text-xs font-bold uppercase text-slate-600 mb-1.5 tracking-wider">
+                  Dari Tanggal
+                </label>
+                <input type="date" id="filterRekapTglMulai"
+                  class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition font-mono" />
+              </div>
+
+              <!-- Filter Sampai Tanggal -->
+              <div class="lg:col-span-2">
+                <label for="filterRekapTglAkhir"
+                  class="block text-xs font-bold uppercase text-slate-600 mb-1.5 tracking-wider">
+                  Sampai Tanggal
+                </label>
+                <input type="date" id="filterRekapTglAkhir"
+                  class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition font-mono" />
+              </div>
+
+              <!-- Action Buttons -->
+              <div class="sm:col-span-2 lg:col-span-4 flex items-center gap-2">
+                <button id="btnCariRekap"
+                  class="flex-1 px-3.5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs sm:text-sm font-semibold transition shadow-sm flex items-center justify-center gap-1.5 active:scale-95">
+                  <i class="fa-solid fa-filter"></i>
+                  <span>Filter</span>
+                </button>
+
+                <button id="btnResetRekap" title="Reset filter nama & tanggal"
+                  class="px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-1.5 active:scale-95">
+                  <i class="fa-solid fa-rotate-left"></i>
+                  <span class="hidden sm:inline">Reset</span>
+                </button>
+
+                <!-- Tombol Unduh Excel SheetJS -->
+                <button id="btnUnduhExcel"
+                  class="flex-1 px-3.5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs sm:text-sm font-semibold transition shadow-sm flex items-center justify-center gap-1.5 active:scale-95"
+                  title="Unduh laporan Excel sesuai filter yang aktif">
+                  <i class="fa-solid fa-file-excel text-sm"></i>
+                  <span>Unduh Rekap</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- SUMMARY COUNTERS (Hadir, Izin, Sakit, Alpa) - Muncul HANYA saat mencari nama & nama tersebut ditemukan -->
+          <div id="containerSummaryRekap" class="hidden space-y-3 transition-all duration-300">
+            <div class="flex items-center justify-between px-1">
+              <span class="text-xs font-bold text-slate-700 flex items-center gap-2">
+                <i class="fa-solid fa-chart-pie text-indigo-600"></i>
+                <span>Ringkasan Kehadiran Peserta: <strong id="summaryNamaPeserta"
+                    class="text-indigo-600 font-extrabold">-</strong></span>
+              </span>
+            </div>
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+              <!-- Hadir -->
+              <div
+                class="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-3 sm:gap-4">
+                <div
+                  class="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl flex-shrink-0">
+                  <i class="fa-solid fa-circle-check"></i>
+                </div>
+                <div>
+                  <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Total Hadir</span>
+                  <span id="summaryHadir" class="text-xl sm:text-2xl font-extrabold text-slate-900">0</span>
+                </div>
+              </div>
+
+              <!-- Izin -->
+              <div
+                class="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-3 sm:gap-4">
+                <div
+                  class="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center text-xl flex-shrink-0">
+                  <i class="fa-solid fa-envelope"></i>
+                </div>
+                <div>
+                  <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Total Izin</span>
+                  <span id="summaryIzin" class="text-xl sm:text-2xl font-extrabold text-slate-900">0</span>
+                </div>
+              </div>
+
+              <!-- Sakit -->
+              <div
+                class="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-3 sm:gap-4">
+                <div
+                  class="w-12 h-12 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center text-xl flex-shrink-0">
+                  <i class="fa-solid fa-notes-medical"></i>
+                </div>
+                <div>
+                  <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Total Sakit</span>
+                  <span id="summarySakit" class="text-xl sm:text-2xl font-extrabold text-slate-900">0</span>
+                </div>
+              </div>
+
+              <!-- Alpa -->
+              <div
+                class="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-3 sm:gap-4">
+                <div
+                  class="w-12 h-12 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center text-xl flex-shrink-0">
+                  <i class="fa-solid fa-circle-xmark"></i>
+                </div>
+                <div>
+                  <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Total Alpa</span>
+                  <span id="summaryAlpa" class="text-xl sm:text-2xl font-extrabold text-slate-900">0</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tabel Riwayat Detail Rekap -->
+          <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+              <h3 class="text-xs sm:text-sm font-bold text-slate-800">
+                Rincian Log Presensi
+              </h3>
+              <span id="rekapRowCountBadge"
+                class="text-xs bg-slate-100 text-slate-600 px-2.5 py-1 rounded-full font-semibold">0 data</span>
+            </div>
+
+            <div class="overflow-x-auto">
+              <table id="tableRekapPresensi" class="w-full text-left border-collapse min-w-[700px]">
+                <thead>
+                  <tr
+                    class="bg-slate-50/80 border-b border-slate-200 text-slate-600 uppercase text-[11px] font-bold tracking-wider">
+                    <th class="py-3.5 px-4 sm:px-6">Nama Peserta</th>
+                    <th class="py-3.5 px-4">Tanggal</th>
+                    <th class="py-3.5 px-4 text-center">Jam Masuk</th>
+                    <th class="py-3.5 px-4 text-center">Jam Keluar</th>
+                    <th class="py-3.5 px-4 text-center">Status / Kategori</th>
+                    <th class="py-3.5 px-4 sm:px-6">Keterangan</th>
+                  </tr>
+                </thead>
+                <tbody id="tableBodyRekap" class="divide-y divide-slate-100 text-xs sm:text-sm">
+                  <!-- Dynamic rows via JavaScript -->
+                  <tr>
+                    <td colspan="6" class="py-12 text-center text-slate-400">
+                      Memuat rekaman presensi...
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ================= VIEW 4: KELOLA AKUN PESERTA (COLLECTION USERS) ================= -->
+        <section id="viewKelolaAkun" class="spa-view hidden space-y-6">
+          <!-- Info Alert Banner -->
+          <div
+            class="bg-indigo-50 border border-indigo-200/80 p-4 rounded-2xl text-indigo-900 text-xs sm:text-sm flex items-start gap-3 shadow-2xs">
+            <i class="fa-solid fa-users-gear text-indigo-600 text-base mt-0.5"></i>
+            <div>
+              <p class="font-bold">Manajemen Akun Peserta Magang (Collection <code>users</code>)</p>
+              <p class="text-indigo-800 text-xs mt-0.5">
+                Daftar akun peserta magang yang melakukan presensi dan tersimpan pada koleksi <strong>users</strong>.
+                Admin dapat menghapus akun peserta yang tidak lagi aktif.
+              </p>
+            </div>
+          </div>
+
+          <!-- Search & Action Card -->
+          <div
+            class="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+            <div class="relative flex-1 max-w-md">
+              <span class="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-slate-400">
+                <i class="fa-solid fa-magnifying-glass text-sm"></i>
+              </span>
+              <input type="text" id="searchUserAccount" placeholder="Cari nama, NIK, atau email..."
+                class="w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition" />
+            </div>
+
+            <div class="flex items-center gap-2">
+              <button id="btnRefreshUsers"
+                class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-2 active:scale-95 shadow-2xs">
+                <i class="fa-solid fa-arrows-rotate"></i>
+                <span>Muat Ulang</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Table Container -->
+          <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+              <h3 class="text-xs sm:text-sm font-bold text-slate-800">
+                Daftar Akun Peserta Magang Terdaftar
+              </h3>
+              <span id="userRowCountBadge"
+                class="text-xs bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-full font-semibold border border-indigo-200/60">0
+                Akun</span>
+            </div>
+
+            <div class="overflow-x-auto">
+              <table class="w-full text-left border-collapse min-w-[720px]">
+                <thead>
+                  <tr
+                    class="bg-slate-50/80 border-b border-slate-200 text-slate-600 uppercase text-[11px] font-bold tracking-wider">
+                    <th class="py-3.5 px-4 sm:px-6">Nama Peserta</th>
+                    <th class="py-3.5 px-4">NIK</th>
+                    <th class="py-3.5 px-4">Kontak / Email</th>
+                    <th class="py-3.5 px-4 font-mono text-xs">User ID (Doc ID)</th>
+                    <th class="py-3.5 px-4 sm:px-6 text-center">Tindakan</th>
+                  </tr>
+                </thead>
+                <tbody id="tableBodyUserAccounts" class="divide-y divide-slate-100 text-xs sm:text-sm">
+                  <!-- Dynamic rows via JavaScript -->
+                  <tr>
+                    <td colspan="5" class="py-12 text-center text-slate-400">
+                      <i class="fa-solid fa-spinner fa-spin text-xl text-indigo-500 mb-2 block"></i>
+                      Memuat daftar akun peserta...
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+      </main>
+    </div>
+  </div>
+
+  <!-- ================= MODAL: LIHAT FOTO LIVE PRESENSI ================= -->
+  <div id="modalFotoPresensi"
+    class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/70 backdrop-blur-xs hidden transition-opacity">
+
+    <!-- Modal Card (Mobile-First: W-full on mobile, max-w-2xl on PC) -->
+    <div
+      class="bg-white rounded-2xl shadow-2xl w-full max-w-lg md:max-w-2xl overflow-hidden transform transition-all flex flex-col max-h-[90vh]">
+      <!-- Modal Header -->
+      <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+        <div>
+          <h3 class="text-sm sm:text-base font-bold text-slate-900 flex items-center gap-2">
+            <i class="fa-solid fa-camera text-indigo-600"></i>
+            <span>Bukti Foto Live Presensi</span>
+          </h3>
+          <p id="modalFotoNamaPeserta" class="text-xs text-slate-500 font-medium mt-0.5">Memuat...</p>
+        </div>
+        <button id="btnCloseModalFoto"
+          class="text-slate-400 hover:text-slate-700 p-2 rounded-xl hover:bg-slate-200/60 transition">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <!-- Modal Body (Foto Masuk & Foto Keluar) -->
+      <div class="p-4 sm:p-6 overflow-y-auto space-y-4">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+          <!-- Foto Masuk Card -->
+          <div class="bg-slate-50 rounded-xl border border-slate-200 p-3 flex flex-col items-center">
+            <div class="w-full flex items-center justify-between mb-2">
+              <span class="text-xs font-bold text-slate-700">Foto Masuk</span>
+              <span id="modalJamMasukBadge"
+                class="text-[11px] font-mono font-semibold px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-md">-</span>
+            </div>
+            <div
+              class="w-full aspect-[4/3] bg-slate-200 rounded-lg overflow-hidden flex items-center justify-center border border-slate-200/80 relative">
+              <img id="modalImgMasuk" src="" alt="Foto Masuk" class="w-full h-full object-cover hidden"
+                onerror="this.classList.add('hidden'); document.getElementById('placeholderImgMasuk').classList.remove('hidden');" />
+              <div id="placeholderImgMasuk" class="text-center p-4 text-slate-400">
+                <i class="fa-regular fa-image text-3xl mb-1 block"></i>
+                <span class="text-xs">Foto masuk belum ada / tidak tersedia</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Foto Keluar Card -->
+          <div class="bg-slate-50 rounded-xl border border-slate-200 p-3 flex flex-col items-center">
+            <div class="w-full flex items-center justify-between mb-2">
+              <span class="text-xs font-bold text-slate-700">Foto Keluar</span>
+              <span id="modalJamKeluarBadge"
+                class="text-[11px] font-mono font-semibold px-2 py-0.5 bg-rose-100 text-rose-800 rounded-md">-</span>
+            </div>
+            <div
+              class="w-full aspect-[4/3] bg-slate-200 rounded-lg overflow-hidden flex items-center justify-center border border-slate-200/80 relative">
+              <img id="modalImgKeluar" src="" alt="Foto Keluar" class="w-full h-full object-cover hidden"
+                onerror="this.classList.add('hidden'); document.getElementById('placeholderImgKeluar').classList.remove('hidden');" />
+              <div id="placeholderImgKeluar" class="text-center p-4 text-slate-400">
+                <i class="fa-regular fa-image text-3xl mb-1 block"></i>
+                <span class="text-xs">Foto keluar belum ada / tidak tersedia</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <div class="bg-slate-100/70 p-3 rounded-xl text-[11px] text-slate-500 flex items-center justify-between">
+          <span>Status Presensi: <strong id="modalStatusBadge" class="text-slate-800 font-semibold">-</strong></span>
+          <span id="modalTanggalBadge" class="font-mono">-</span>
+        </div>
+
+        <!-- Catatan / Alasan (Pulang Cepat, Terlambat, dll) -->
+        <div id="modalKetBox" class="hidden space-y-1.5">
+          <span class="font-bold text-slate-700 block text-xs flex items-center gap-1.5">
+            <i class="fa-solid fa-clipboard-list text-indigo-600"></i>
+            Keterangan Khusus Kehadiran:
+          </span>
+          <div id="modalKetText"></div>
+        </div>
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="px-5 py-3 border-t border-slate-100 bg-slate-50 flex justify-end">
+        <button id="btnTutupModalFotoFooter"
+          class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold rounded-xl text-xs transition">
+          Tutup
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL: LIHAT FOTO BUKTI IZIN / SAKIT ================= -->
+  <div id="modalFotoBukti"
+    class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/70 backdrop-blur-xs hidden transition-opacity">
+
+    <!-- Modal Card -->
+    <div
+      class="bg-white rounded-2xl shadow-2xl w-full max-w-lg md:max-w-xl overflow-hidden transform transition-all flex flex-col max-h-[92vh]">
+      <!-- Modal Header -->
+      <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+        <div>
+          <h3 class="text-sm sm:text-base font-bold text-slate-900 flex items-center gap-2">
+            <i class="fa-solid fa-file-medical text-amber-600"></i>
+            <span>Lampiran Foto Bukti Pengajuan</span>
+          </h3>
+          <p id="modalBuktiNamaPeserta" class="text-xs text-slate-500 font-medium mt-0.5">Memuat...</p>
+        </div>
+        <button id="btnCloseModalBukti"
+          class="text-slate-400 hover:text-slate-700 p-2 rounded-xl hover:bg-slate-200/60 transition">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <!-- Modal Body -->
+      <div class="p-4 sm:p-6 overflow-y-auto space-y-4">
+        <!-- Badge Info Header -->
+        <div
+          class="flex flex-wrap items-center justify-between gap-2 bg-slate-50 p-3 rounded-xl border border-slate-200/70 text-xs">
+          <div class="flex items-center gap-1.5">
+            <span class="text-slate-500">Kategori:</span>
+            <span id="modalBuktiKategoriBadge" class="font-bold text-amber-700">-</span>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <span class="text-slate-500">Status:</span>
+            <span id="modalBuktiStatusBadge" class="font-bold">-</span>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <span class="text-slate-500">Tanggal:</span>
+            <span id="modalBuktiTanggalBadge" class="font-mono font-semibold text-slate-700">-</span>
+          </div>
+        </div>
+
+        <!-- Foto Container -->
+        <div class="bg-slate-50 rounded-xl border border-slate-200 p-2 sm:p-3 flex flex-col items-center">
+          <div
+            class="w-full min-h-[220px] max-h-[420px] bg-slate-900/5 rounded-lg overflow-hidden flex items-center justify-center border border-slate-200/80 relative">
+            <img id="modalImgBukti" src="" alt="Foto Bukti Surat Dokter / Izin"
+              class="max-w-full max-h-[400px] object-contain rounded-md hidden shadow-xs"
+              onerror="this.classList.add('hidden'); document.getElementById('placeholderImgBukti').classList.remove('hidden');" />
+            <div id="placeholderImgBukti" class="text-center p-6 text-slate-400">
+              <i class="fa-regular fa-image text-4xl mb-2 block text-slate-300"></i>
+              <span class="text-xs font-medium text-slate-500">Foto bukti belum ada atau tidak dapat dimuat</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Alasan / Keterangan -->
+        <div class="bg-amber-50/70 border border-amber-200/80 p-3.5 rounded-xl text-xs space-y-1">
+          <span class="font-bold text-amber-900 block flex items-center gap-1.5">
+            <i class="fa-solid fa-note-sticky text-amber-600"></i>
+            Keterangan / Alasan Peserta:
+          </span>
+          <p id="modalBuktiKeterangan" class="text-slate-700 leading-relaxed font-medium">-</p>
+        </div>
+      </div>
+
+      <!-- Modal Footer with Quick Action ACC & Tolak -->
+      <div class="px-5 py-3.5 border-t border-slate-100 bg-slate-50 flex items-center justify-between gap-2">
+        <button id="btnTutupModalBuktiFooter"
+          class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold rounded-xl text-xs transition">
+          Tutup
+        </button>
+
+        <div class="flex items-center gap-2">
+          <!-- Text/Badge status jika sudah di-ACC atau Ditolak -->
+          <div id="modalBuktiStatusText" class="hidden"></div>
+
+          <!-- Tombol Tolak di Modal -->
+          <button id="modalBtnTolakBukti"
+            class="px-3.5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 font-semibold rounded-xl text-xs transition flex items-center gap-1.5 active:scale-95">
+            <i class="fa-solid fa-xmark"></i>
+            <span>Tolak</span>
+          </button>
+          <!-- Tombol ACC di Modal -->
+          <button id="modalBtnAccBukti"
+            class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl text-xs shadow-xs transition flex items-center gap-1.5 active:scale-95">
+            <i class="fa-solid fa-check"></i>
+            <span>ACC Pengajuan</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL: KONFIRMASI HAPUS AKUN USER ================= -->
+  <div id="modalConfirmDeleteUser"
+    class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/70 backdrop-blur-xs hidden transition-opacity">
+
+    <!-- Modal Card -->
+    <div
+      class="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all flex flex-col animate-in fade-in zoom-in-95">
+      <!-- Modal Header -->
+      <div class="px-5 py-4 border-b border-rose-100 flex items-center justify-between bg-rose-50/80">
+        <div class="flex items-center gap-2.5">
+          <div
+            class="w-9 h-9 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center font-bold text-sm flex-shrink-0">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+          </div>
+          <div>
+            <h3 class="text-sm sm:text-base font-bold text-rose-950">
+              Konfirmasi Hapus Akun
+            </h3>
+            <p class="text-[11px] text-rose-700 font-medium">Tindakan ini permanen di collection <code>users</code></p>
+          </div>
+        </div>
+        <button id="btnCloseModalDeleteUser"
+          class="text-slate-400 hover:text-slate-700 p-2 rounded-xl hover:bg-slate-200/60 transition">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <!-- Modal Body -->
+      <div class="p-5 space-y-4">
+        <p class="text-xs sm:text-sm text-slate-600">
+          Apakah Anda yakin ingin menghapus akun peserta berikut dari collection <strong>users</strong>?
+        </p>
+
+        <div class="bg-slate-50 rounded-xl p-3.5 border border-slate-200 space-y-2 text-xs">
+          <div class="flex justify-between items-center">
+            <span class="text-slate-400">Nama:</span>
+            <strong id="modalDeleteUserNama" class="text-slate-900 font-bold">-</strong>
+          </div>
+          <div class="flex justify-between items-center">
+            <span class="text-slate-400">NIK:</span>
+            <span id="modalDeleteUserNik" class="font-mono font-semibold text-slate-800">-</span>
+          </div>
+          <div class="flex justify-between items-center">
+            <span class="text-slate-400">UID / Doc ID:</span>
+            <span id="modalDeleteUserUid" class="font-mono text-[11px] text-slate-500 truncate max-w-[200px]">-</span>
+          </div>
+        </div>
+
+        <div class="p-3 bg-amber-50 rounded-xl border border-amber-200 text-amber-900 text-xs flex items-start gap-2">
+          <i class="fa-solid fa-circle-exclamation text-amber-600 mt-0.5 flex-shrink-0"></i>
+          <span>Setelah dihapus dari collection <code>users</code>, relasi nama dan akun peserta ini akan
+            terhapus.</span>
+        </div>
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="px-5 py-3.5 border-t border-slate-100 bg-slate-50 flex items-center justify-end gap-2">
+        <button id="btnBatalHapusUser"
+          class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold rounded-xl text-xs transition">
+          Batal
+        </button>
+        <button id="btnExecuteDeleteUser"
+          class="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-semibold rounded-xl text-xs shadow-xs transition flex items-center gap-1.5 active:scale-95">
+          <i class="fa-solid fa-trash-can"></i>
+          <span id="btnExecuteDeleteText">Ya, Hapus Akun</span>
+          <i id="spinnerExecuteDelete" class="fa-solid fa-circle-notch fa-spin hidden"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Entry Script Modular ES6 (Cache-busted) -->
+  <script type="module" src="app.js?v=2.0.8"></script>
+</body>
+
+</html>
