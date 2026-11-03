@@ -2654,105 +2654,603 @@ function filterAndRenderRekap() {
 }
 
 // ============================================================================
-// 7. FITUR EKSPOR EXCEL (SHEETJS XLSX)
+// 7. FITUR EKSPOR EXCEL (MODERN, BERSIH & INFORMATIF)
 // ============================================================================
+
+/**
+ * Ekstraksi nama hari dalam Bahasa Indonesia dari string tanggal (YYYY-MM-DD)
+ */
+function getIndonesianDayName(dateStr) {
+  if (!dateStr || typeof dateStr !== 'string') return '-';
+  const clean = dateStr.trim();
+  const m = clean.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return '-';
+  try {
+    const d = new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10));
+    const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+    return days[d.getDay()] || '-';
+  } catch (_) {
+    return '-';
+  }
+}
+
+/**
+ * Tentukan warna dan styling cell status untuk ExcelJS
+ */
+function getStatusExcelStyle(statusStr) {
+  const s = String(statusStr || '').toLowerCase();
+  if (s.includes('sakit')) {
+    return {
+      fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFBEB' } }, // amber-50
+      font: { name: 'Segoe UI', size: 9.5, bold: true, color: { argb: 'FFB45309' } } // amber-700
+    };
+  }
+  if (s.includes('izin_darurat') || s.includes('darurat')) {
+    return {
+      fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFDF4FF' } }, // fuchsia-50
+      font: { name: 'Segoe UI', size: 9.5, bold: true, color: { argb: 'FFA21CAF' } } // fuchsia-700
+    };
+  }
+  if (s.includes('izin')) {
+    return {
+      fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEFF6FF' } }, // blue-50
+      font: { name: 'Segoe UI', size: 9.5, bold: true, color: { argb: 'FF1D4ED8' } } // blue-700
+    };
+  }
+  if (s.includes('alpa') || s.includes('tolak') || s.includes('ditolak')) {
+    return {
+      fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF1F2' } }, // rose-50
+      font: { name: 'Segoe UI', size: 9.5, bold: true, color: { argb: 'FFBE123C' } } // rose-700
+    };
+  }
+  // Default Hadir / Check In / Check Out
+  return {
+    fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFECFDF5' } }, // emerald-50
+    font: { name: 'Segoe UI', size: 9.5, bold: true, color: { argb: 'FF047857' } } // emerald-700
+  };
+}
+
+/**
+ * Hitung agregasi statistik rekap per individu
+ */
+function aggregatePerParticipant(dataList) {
+  const map = new Map();
+  dataList.forEach(item => {
+    const nama = item.resolvedNama || item.nama || 'Peserta';
+    const nik = item.resolvedNik || item.nik || '-';
+    const key = `${nik}_${nama}`;
+    if (!map.has(key)) {
+      map.set(key, { nama, nik, hadir: 0, izin: 0, sakit: 0, alpa: 0, total: 0 });
+    }
+    const entry = map.get(key);
+    entry.total++;
+    const s = String(item.status || item.kategori || '').toLowerCase();
+    if (s.includes('sakit')) entry.sakit++;
+    else if (s.includes('izin')) entry.izin++;
+    else if (s.includes('alpa') || s.includes('alpha') || s.includes('tidak hadir')) entry.alpa++;
+    else entry.hadir++;
+  });
+  return Array.from(map.values()).sort((a, b) => a.nama.localeCompare(b.nama));
+}
+
+/**
+ * Ekspor Berkas Excel Menggunakan ExcelJS (Modern, Berwarna, Bergaris Elegan & 2 Sheet)
+ */
+async function generateModernExcelWithExcelJS(dataToExport, meta) {
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'MagangHub BPS Kota Banjar';
+  workbook.lastModifiedBy = meta.adminName;
+  workbook.created = new Date();
+  workbook.modified = new Date();
+
+  // Hitung summary KPI
+  let hadir = 0;
+  let izin = 0;
+  let sakit = 0;
+  let alpa = 0;
+  dataToExport.forEach(item => {
+    const s = String(item.status || item.kategori || '').toLowerCase();
+    if (s.includes('sakit')) sakit++;
+    else if (s.includes('izin')) izin++;
+    else if (s.includes('alpa') || s.includes('alpha') || s.includes('tidak hadir')) alpa++;
+    else hadir++;
+  });
+  const totalLog = dataToExport.length;
+  const pctHadir = totalLog > 0 ? ((hadir / totalLog) * 100).toFixed(1) + '%' : '0%';
+
+  // --------------------------------------------------------------------------
+  // SHEET 1: REKAPITULASI PRESENSI HARIAN & DETAIL
+  // --------------------------------------------------------------------------
+  const sheet1 = workbook.addWorksheet('Rekapitulasi Presensi', {
+    views: [{ state: 'frozen', ySplit: 11, showGridLines: true }]
+  });
+
+  sheet1.columns = [
+    { key: 'no', width: 6 },
+    { key: 'nama', width: 28 },
+    { key: 'nik', width: 22 },
+    { key: 'hari', width: 13 },
+    { key: 'tanggal', width: 16 },
+    { key: 'jam_masuk', width: 15 },
+    { key: 'jam_keluar', width: 15 },
+    { key: 'status', width: 22 },
+    { key: 'keterangan', width: 38 }
+  ];
+
+  // 1. Kop Surat & Judul Laporan
+  sheet1.mergeCells('A1:I1');
+  const title1 = sheet1.getCell('A1');
+  title1.value = 'BADAN PUSAT STATISTIK KOTA BANJAR';
+  title1.font = { name: 'Segoe UI', size: 14, bold: true, color: { argb: 'FF1E293B' } };
+  title1.alignment = { horizontal: 'left', vertical: 'middle' };
+  sheet1.getRow(1).height = 24;
+
+  sheet1.mergeCells('A2:I2');
+  const title2 = sheet1.getCell('A2');
+  title2.value = 'LAPORAN REKAPITULASI KEHADIRAN & PERIZINAN PESERTA MAGANG';
+  title2.font = { name: 'Segoe UI', size: 11, bold: true, color: { argb: 'FF4338CA' } };
+  title2.alignment = { horizontal: 'left', vertical: 'middle' };
+  sheet1.getRow(2).height = 20;
+
+  sheet1.mergeCells('A3:I3');
+  const title3 = sheet1.getCell('A3');
+  title3.value = 'Sistem Informasi Presensi & Manajemen MagangHub BPS Kota Banjar';
+  title3.font = { name: 'Segoe UI', size: 9, italic: true, color: { argb: 'FF64748B' } };
+  title3.alignment = { horizontal: 'left', vertical: 'middle' };
+  sheet1.getRow(3).height = 16;
+
+  sheet1.getRow(4).height = 8; // Spacing
+
+  // 2. Metadata Info Card (Baris 5)
+  sheet1.getRow(5).height = 20;
+  sheet1.getCell('A5').value = 'Filter Peserta:';
+  sheet1.getCell('A5').font = { name: 'Segoe UI', size: 9, bold: true, color: { argb: 'FF475569' } };
+  sheet1.mergeCells('B5:C5');
+  sheet1.getCell('B5').value = meta.searchKeyword || 'Semua Peserta Magang';
+  sheet1.getCell('B5').font = { name: 'Segoe UI', size: 9, bold: true, color: { argb: 'FF0F172A' } };
+
+  sheet1.getCell('D5').value = 'Periode:';
+  sheet1.getCell('D5').font = { name: 'Segoe UI', size: 9, bold: true, color: { argb: 'FF475569' } };
+  sheet1.mergeCells('E5:F5');
+  sheet1.getCell('E5').value = meta.periodeText;
+  sheet1.getCell('E5').font = { name: 'Segoe UI', size: 9, bold: true, color: { argb: 'FF0F172A' } };
+
+  sheet1.getCell('G5').value = 'Waktu Unduh:';
+  sheet1.getCell('G5').font = { name: 'Segoe UI', size: 9, bold: true, color: { argb: 'FF475569' } };
+  sheet1.mergeCells('H5:I5');
+  sheet1.getCell('H5').value = `${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}, ${new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} WIB`;
+  sheet1.getCell('H5').font = { name: 'Segoe UI', size: 9, color: { argb: 'FF0F172A' } };
+
+  sheet1.getRow(6).height = 8; // Spacing
+
+  // 3. KPI Summary Blocks (Baris 7 & 8)
+  sheet1.getRow(7).height = 18;
+  sheet1.getRow(8).height = 24;
+
+  const kpiConfigs = [
+    { rangeTitle: 'A7:B7', rangeVal: 'A8:B8', title: 'TOTAL HADIR', val: hadir, bg: 'FFECFDF5', text: 'FF065F46', border: 'FF10B981' },
+    { rangeTitle: 'C7:D7', rangeVal: 'C8:D8', title: 'TOTAL IZIN', val: izin, bg: 'FFEFF6FF', text: 'FF1E40AF', border: 'FF3B82F6' },
+    { rangeTitle: 'E7:F7', rangeVal: 'E8:F8', title: 'TOTAL SAKIT', val: sakit, bg: 'FFFFFBEB', text: 'FF92400E', border: 'FFF59E0B' },
+    { rangeTitle: 'G7', rangeVal: 'G8', title: 'TOTAL ALPA', val: alpa, bg: 'FFFFF1F2', text: 'FF9F1239', border: 'FFF43F5E' },
+    { rangeTitle: 'H7', rangeVal: 'H8', title: 'TOTAL CATATAN', val: totalLog, bg: 'FFF8FAFC', text: 'FF334155', border: 'FF94A3B8' },
+    { rangeTitle: 'I7', rangeVal: 'I8', title: '% KEHADIRAN', val: pctHadir, bg: 'FFEEF2FF', text: 'FF4338CA', border: 'FF6366F1' }
+  ];
+
+  kpiConfigs.forEach(k => {
+    if (k.rangeTitle.includes(':')) sheet1.mergeCells(k.rangeTitle);
+    if (k.rangeVal.includes(':')) sheet1.mergeCells(k.rangeVal);
+
+    const cellTitle = sheet1.getCell(k.rangeTitle.split(':')[0]);
+    cellTitle.value = k.title;
+    cellTitle.font = { name: 'Segoe UI', size: 8, bold: true, color: { argb: k.text } };
+    cellTitle.alignment = { horizontal: 'center', vertical: 'middle' };
+    cellTitle.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: k.bg } };
+
+    const cellVal = sheet1.getCell(k.rangeVal.split(':')[0]);
+    cellVal.value = k.val;
+    cellVal.font = { name: 'Segoe UI', size: 14, bold: true, color: { argb: k.text } };
+    cellVal.alignment = { horizontal: 'center', vertical: 'middle' };
+    cellVal.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: k.bg } };
+  });
+
+  sheet1.getRow(9).height = 6;
+  sheet1.getRow(10).height = 6;
+
+  // 4. Header Tabel Presensi (Baris 11)
+  const headerRow = sheet1.getRow(11);
+  headerRow.height = 26;
+  headerRow.values = [
+    'NO',
+    'NAMA PESERTA',
+    'NIK',
+    'HARI',
+    'TANGGAL',
+    'JAM MASUK',
+    'JAM KELUAR',
+    'STATUS KEHADIRAN',
+    'KETERANGAN / ALASAN'
+  ];
+
+  headerRow.eachCell((cell) => {
+    cell.font = { name: 'Segoe UI', size: 9.5, bold: true, color: { argb: 'FFFFFFFF' } };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } }; // Dark Navy Slate
+    cell.alignment = { horizontal: 'center', vertical: 'middle' };
+    cell.border = {
+      top: { style: 'thin', color: { argb: 'FF334155' } },
+      bottom: { style: 'medium', color: { argb: 'FF0F172A' } },
+      left: { style: 'thin', color: { argb: 'FF334155' } },
+      right: { style: 'thin', color: { argb: 'FF334155' } }
+    };
+  });
+
+  // 5. Data Rows (Baris 12+)
+  const thinBorder = {
+    top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+    bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+    left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+    right: { style: 'thin', color: { argb: 'FFE2E8F0' } }
+  };
+
+  dataToExport.forEach((item, idx) => {
+    const rowNumber = 12 + idx;
+    const r = sheet1.getRow(rowNumber);
+    r.height = 21;
+
+    const nama = item.resolvedNama || item.nama || 'Peserta';
+    const nik = item.resolvedNik || item.nik || '-';
+    const tgl = item.resolvedTanggal || item.tanggal || item.date || '-';
+    const hari = getIndonesianDayName(tgl);
+    const masuk = item.resolvedJamMasuk || formatTimeDisplay(item.jam_masuk || item.jamMasuk);
+    const keluar = item.resolvedJamKeluar || formatTimeDisplay(item.jam_keluar || item.jamKeluar);
+    const status = item.status || item.kategori || 'Hadir';
+    const ket = item.keterangan || item.alasan || '-';
+
+    r.values = [
+      idx + 1,
+      nama,
+      nik,
+      hari,
+      tgl,
+      masuk,
+      keluar,
+      status,
+      ket
+    ];
+
+    const isEven = idx % 2 === 1;
+    const rowBg = isEven ? 'FFF8FAFC' : 'FFFFFFFF'; // Zebra Striping
+
+    r.eachCell((cell, colNumber) => {
+      cell.border = thinBorder;
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: rowBg } };
+      cell.font = { name: 'Segoe UI', size: 9, color: { argb: 'FF334155' } };
+
+      // Kolom No, NIK, Hari, Tanggal, Jam Masuk, Jam Keluar: Center
+      if ([1, 3, 4, 5, 6, 7].includes(colNumber)) {
+        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+      } else if (colNumber === 2) {
+        // Nama Peserta: Bold & Left
+        cell.font = { name: 'Segoe UI', size: 9.5, bold: true, color: { argb: 'FF0F172A' } };
+        cell.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+      } else if (colNumber === 8) {
+        // Status: Badge Color Stylings
+        const style = getStatusExcelStyle(status);
+        cell.fill = style.fill;
+        cell.font = style.font;
+        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+      } else if (colNumber === 9) {
+        // Keterangan: Left
+        cell.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+      }
+
+      // Pastikan NIK berformat teks agar tidak terpotong menjadi notasi ilmiah (scientific 1.23E+15)
+      if (colNumber === 3) {
+        cell.numFmt = '@';
+      }
+    });
+  });
+
+  // Auto-filter pada header tabel
+  sheet1.autoFilter = {
+    from: 'A11',
+    to: `I${11 + dataToExport.length}`
+  };
+
+  // Baris Total di Bagian Bawah
+  const summaryRowIndex = 12 + dataToExport.length;
+  sheet1.mergeCells(`A${summaryRowIndex}:G${summaryRowIndex}`);
+  const footCell = sheet1.getCell(`A${summaryRowIndex}`);
+  footCell.value = `TOTAL KESELURUHAN REKAMAN DATA: ${dataToExport.length} BARIS`;
+  footCell.font = { name: 'Segoe UI', size: 9, bold: true, color: { argb: 'FF1E293B' } };
+  footCell.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+
+  const footHadirCell = sheet1.getCell(`H${summaryRowIndex}`);
+  footHadirCell.value = `Hadir: ${hadir} | Izin: ${izin} | Sakit: ${sakit} | Alpa: ${alpa}`;
+  footHadirCell.font = { name: 'Segoe UI', size: 8.5, bold: true, color: { argb: 'FF475569' } };
+  footHadirCell.alignment = { horizontal: 'center', vertical: 'middle' };
+
+  sheet1.mergeCells(`H${summaryRowIndex}:I${summaryRowIndex}`);
+
+  sheet1.getRow(summaryRowIndex).height = 24;
+  sheet1.getRow(summaryRowIndex).eachCell((cell) => {
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
+    cell.border = {
+      top: { style: 'thin', color: { argb: 'FF94A3B8' } },
+      bottom: { style: 'double', color: { argb: 'FF0F172A' } }
+    };
+  });
+
+  // --------------------------------------------------------------------------
+  // SHEET 2: RINGKASAN PERSENTASE PER PESERTA (PIVOT INFORMATIF)
+  // --------------------------------------------------------------------------
+  const sheet2 = workbook.addWorksheet('Ringkasan per Peserta', {
+    views: [{ state: 'frozen', ySplit: 5, showGridLines: true }]
+  });
+
+  sheet2.columns = [
+    { key: 'no', width: 6 },
+    { key: 'nama', width: 28 },
+    { key: 'nik', width: 22 },
+    { key: 'hadir', width: 12 },
+    { key: 'izin', width: 12 },
+    { key: 'sakit', width: 12 },
+    { key: 'alpa', width: 12 },
+    { key: 'total', width: 15 },
+    { key: 'persentase', width: 16 }
+  ];
+
+  sheet2.mergeCells('A1:I1');
+  sheet2.getCell('A1').value = 'RINGKASAN TINGKAT KEHADIRAN PER PESERTA MAGANG';
+  sheet2.getCell('A1').font = { name: 'Segoe UI', size: 12, bold: true, color: { argb: 'FF1E293B' } };
+  sheet2.getCell('A1').alignment = { horizontal: 'left', vertical: 'middle' };
+
+  sheet2.mergeCells('A2:I2');
+  sheet2.getCell('A2').value = `Periode: ${meta.periodeText} | Total Peserta Terdata: ${new Set(dataToExport.map(x => x.resolvedNik || x.nik || x.nama)).size} Orang`;
+  sheet2.getCell('A2').font = { name: 'Segoe UI', size: 9, italic: true, color: { argb: 'FF64748B' } };
+
+  sheet2.getRow(3).height = 8;
+
+  const header2 = sheet2.getRow(5);
+  header2.height = 26;
+  header2.values = ['NO', 'NAMA PESERTA', 'NIK', 'HADIR', 'IZIN', 'SAKIT', 'ALPA', 'TOTAL LOG', '% KEHADIRAN'];
+  header2.eachCell(cell => {
+    cell.font = { name: 'Segoe UI', size: 9.5, bold: true, color: { argb: 'FFFFFFFF' } };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF312E81' } }; // Deep Indigo
+    cell.alignment = { horizontal: 'center', vertical: 'middle' };
+    cell.border = {
+      top: { style: 'thin', color: { argb: 'FF4338CA' } },
+      bottom: { style: 'medium', color: { argb: 'FF1E1B4B' } }
+    };
+  });
+
+  const participants = aggregatePerParticipant(dataToExport);
+  participants.forEach((p, idx) => {
+    const rowNum = 6 + idx;
+    const r = sheet2.getRow(rowNum);
+    r.height = 21;
+    const pct = p.total > 0 ? ((p.hadir / p.total) * 100).toFixed(1) + '%' : '0%';
+
+    r.values = [
+      idx + 1,
+      p.nama,
+      p.nik,
+      p.hadir,
+      p.izin,
+      p.sakit,
+      p.alpa,
+      p.total,
+      pct
+    ];
+
+    const isEven = idx % 2 === 1;
+    const rowBg = isEven ? 'FFF8FAFC' : 'FFFFFFFF';
+
+    r.eachCell((cell, colNum) => {
+      cell.border = thinBorder;
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: rowBg } };
+      cell.font = { name: 'Segoe UI', size: 9, color: { argb: 'FF334155' } };
+
+      if (colNum === 1 || colNum === 3) {
+        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+      } else if (colNum === 2) {
+        cell.font = { name: 'Segoe UI', size: 9.5, bold: true, color: { argb: 'FF0F172A' } };
+        cell.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+      } else if (colNum >= 4 && colNum <= 8) {
+        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+        if (colNum === 4 && p.hadir > 0) cell.font = { name: 'Segoe UI', size: 9, bold: true, color: { argb: 'FF047857' } };
+        if (colNum === 5 && p.izin > 0) cell.font = { name: 'Segoe UI', size: 9, bold: true, color: { argb: 'FF1D4ED8' } };
+        if (colNum === 6 && p.sakit > 0) cell.font = { name: 'Segoe UI', size: 9, bold: true, color: { argb: 'FFB45309' } };
+        if (colNum === 7 && p.alpa > 0) cell.font = { name: 'Segoe UI', size: 9, bold: true, color: { argb: 'FFBE123C' } };
+      } else if (colNum === 9) {
+        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+        cell.font = { name: 'Segoe UI', size: 9.5, bold: true, color: { argb: 'FF4338CA' } };
+      }
+
+      if (colNum === 3) cell.numFmt = '@';
+    });
+  });
+
+  sheet2.autoFilter = {
+    from: 'A5',
+    to: `I${5 + participants.length}`
+  };
+
+  // Unduh Berkas Excel via Blob
+  const buffer = await workbook.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = meta.fileName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  window.URL.revokeObjectURL(url);
+
+  showToast(`Laporan presensi modern berhasil diunduh: ${meta.fileName}`, 'success');
+}
+
+/**
+ * Fallback Ekspor Berkas Excel Menggunakan SheetJS (XLSX) jika ExcelJS offline
+ */
+function generateStructuredExcelWithSheetJS(dataToExport, meta) {
+  let hadir = 0;
+  let izin = 0;
+  let sakit = 0;
+  let alpa = 0;
+  dataToExport.forEach(item => {
+    const s = String(item.status || item.kategori || '').toLowerCase();
+    if (s.includes('sakit')) sakit++;
+    else if (s.includes('izin')) izin++;
+    else if (s.includes('alpa') || s.includes('alpha') || s.includes('tidak hadir')) alpa++;
+    else hadir++;
+  });
+  const totalLog = dataToExport.length;
+  const pctHadir = totalLog > 0 ? ((hadir / totalLog) * 100).toFixed(1) + '%' : '0%';
+
+  const rows = [];
+  rows.push(['BADAN PUSAT STATISTIK KOTA BANJAR']);
+  rows.push(['LAPORAN REKAPITULASI PRESENSI & PERIZINAN MAGANGHUB']);
+  rows.push(['Filter Pencarian Peserta', meta.searchKeyword || 'Semua Peserta']);
+  rows.push(['Periode Tanggal', meta.periodeText]);
+  rows.push(['Waktu Unduh', `${new Date().toLocaleString('id-ID')} WIB`]);
+  rows.push(['Diekspor Oleh', meta.adminName]);
+  rows.push([]);
+
+  rows.push(['RINGKASAN KEHADIRAN (STATISTIK)']);
+  rows.push(['Total Hadir', hadir]);
+  rows.push(['Total Izin', izin]);
+  rows.push(['Total Sakit', sakit]);
+  rows.push(['Total Alpa', alpa]);
+  rows.push(['Total Catatan Presensi', totalLog]);
+  rows.push(['% Tingkat Kehadiran', pctHadir]);
+  rows.push([]);
+
+  rows.push(['No', 'Nama Peserta', 'NIK', 'Hari', 'Tanggal', 'Jam Masuk', 'Jam Keluar', 'Status Kehadiran', 'Keterangan']);
+
+  dataToExport.forEach((item, index) => {
+    const tgl = item.resolvedTanggal || item.tanggal || item.date || '-';
+    rows.push([
+      index + 1,
+      item.resolvedNama || item.nama || 'Peserta',
+      item.resolvedNik || item.nik || '-',
+      getIndonesianDayName(tgl),
+      tgl,
+      item.resolvedJamMasuk || formatTimeDisplay(item.jam_masuk || item.jamMasuk),
+      item.resolvedJamKeluar || formatTimeDisplay(item.jam_keluar || item.jamKeluar),
+      item.status || item.kategori || 'Hadir',
+      item.keterangan || item.alasan || '-'
+    ]);
+  });
+
+  const worksheet1 = XLSX.utils.aoa_to_sheet(rows);
+  worksheet1['!cols'] = [
+    { wch: 6 },  // No
+    { wch: 28 }, // Nama
+    { wch: 22 }, // NIK
+    { wch: 12 }, // Hari
+    { wch: 15 }, // Tanggal
+    { wch: 14 }, // Jam Masuk
+    { wch: 14 }, // Jam Keluar
+    { wch: 20 }, // Status
+    { wch: 36 }  // Keterangan
+  ];
+
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet1, 'Rekap Presensi');
+
+  // Sheet 2: Ringkasan per Peserta
+  const participants = aggregatePerParticipant(dataToExport);
+  const rows2 = [
+    ['RINGKASAN KEHADIRAN PER PESERTA MAGANG'],
+    [`Periode: ${meta.periodeText}`],
+    [],
+    ['No', 'Nama Peserta', 'NIK', 'Hadir', 'Izin', 'Sakit', 'Alpa', 'Total Catatan', '% Kehadiran']
+  ];
+  participants.forEach((p, idx) => {
+    const pct = p.total > 0 ? ((p.hadir / p.total) * 100).toFixed(1) + '%' : '0%';
+    rows2.push([idx + 1, p.nama, p.nik, p.hadir, p.izin, p.sakit, p.alpa, p.total, pct]);
+  });
+  const worksheet2 = XLSX.utils.aoa_to_sheet(rows2);
+  worksheet2['!cols'] = [
+    { wch: 6 },
+    { wch: 28 },
+    { wch: 22 },
+    { wch: 10 },
+    { wch: 10 },
+    { wch: 10 },
+    { wch: 10 },
+    { wch: 14 },
+    { wch: 15 }
+  ];
+  XLSX.utils.book_append_sheet(workbook, worksheet2, 'Ringkasan Peserta');
+
+  XLSX.writeFile(workbook, meta.fileName);
+  showToast(`File Excel berhasil diunduh: ${meta.fileName}`, 'success');
+}
 
 /**
  * Ekspor data rekapitulasi ke file Excel .xlsx berdasarkan filter aktif (nama/NIK & tanggal)
  */
-function exportRekapToExcel() {
-  if (typeof XLSX === 'undefined') {
-    showToast('Library SheetJS belum siap dimuat.', 'error');
-    return;
-  }
-
+async function exportRekapToExcel() {
   const dataToExport = STATE.rekapFilteredList;
   if (!dataToExport || dataToExport.length === 0) {
     showToast('Tidak ada data yang sesuai filter untuk diekspor ke Excel.', 'warning');
     return;
   }
 
-  const searchKeyword = document.getElementById('searchNamaPeserta')?.value.trim() || '';
-  const tglMulai = document.getElementById('filterRekapTglMulai')?.value.trim() || '';
-  const tglAkhir = document.getElementById('filterRekapTglAkhir')?.value.trim() || '';
-
-  const sanitizeName = searchKeyword ? searchKeyword.replace(/[^a-zA-Z0-9_\-]/g, '_') : 'Semua_Peserta';
-  const tanggalHariIni = getFormattedDate();
-
-  let periodeText = 'Semua Periode Tanggal';
-  let datePartFilename = tanggalHariIni;
-  if (tglMulai && tglAkhir) {
-    periodeText = tglMulai === tglAkhir ? tglMulai : `${tglMulai} s/d ${tglAkhir}`;
-    datePartFilename = tglMulai === tglAkhir ? tglMulai : `${tglMulai}_sd_${tglAkhir}`;
-  } else if (tglMulai) {
-    periodeText = `Mulai ${tglMulai}`;
-    datePartFilename = `mulai_${tglMulai}`;
-  } else if (tglAkhir) {
-    periodeText = `Sampai ${tglAkhir}`;
-    datePartFilename = `sampai_${tglAkhir}`;
+  const btnUnduhExcel = document.getElementById('btnUnduhExcel');
+  const originalBtnHtml = btnUnduhExcel ? btnUnduhExcel.innerHTML : '';
+  if (btnUnduhExcel) {
+    btnUnduhExcel.disabled = true;
+    btnUnduhExcel.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> <span>Menyusun...</span>`;
   }
 
-  // Susun data terstruktur untuk sheet
-  const rows = [];
+  try {
+    const searchKeyword = document.getElementById('searchNamaPeserta')?.value.trim() || '';
+    const tglMulai = document.getElementById('filterRekapTglMulai')?.value.trim() || '';
+    const tglAkhir = document.getElementById('filterRekapTglAkhir')?.value.trim() || '';
 
-  // 1. Header Informasi Dokumen
-  rows.push(['LAPORAN REKAPITULASI PRESENSI MAGANGHUB']);
-  rows.push(['Filter Pencarian Peserta', searchKeyword || 'Semua Peserta']);
-  rows.push(['Periode Tanggal', periodeText]);
-  rows.push(['Tanggal Unduh', `${new Date().toLocaleString('id-ID')} WIB`]);
-  rows.push(['Diekspor Oleh', STATE.currentUser?.nama || STATE.currentUser?.email || 'Admin']);
-  rows.push([]); // blank row
+    const sanitizeName = searchKeyword ? searchKeyword.replace(/[^a-zA-Z0-9_\-]/g, '_') : 'Semua_Peserta';
+    const tanggalHariIni = getFormattedDate();
 
-  // 2. Summary Statistik
-  rows.push(['RINGKASAN KEHADIRAN']);
-  rows.push(['Total Hadir', STATE.rekapSummary.hadir]);
-  rows.push(['Total Izin', STATE.rekapSummary.izin]);
-  rows.push(['Total Sakit', STATE.rekapSummary.sakit]);
-  rows.push(['Total Alpa', STATE.rekapSummary.alpa]);
-  rows.push(['Total Catatan Presensi', dataToExport.length]);
-  rows.push([]); // blank row
+    let periodeText = 'Semua Periode Tanggal';
+    let datePartFilename = tanggalHariIni;
+    if (tglMulai && tglAkhir) {
+      periodeText = tglMulai === tglAkhir ? tglMulai : `${tglMulai} s/d ${tglAkhir}`;
+      datePartFilename = tglMulai === tglAkhir ? tglMulai : `${tglMulai}_sd_${tglAkhir}`;
+    } else if (tglMulai) {
+      periodeText = `Mulai ${tglMulai}`;
+      datePartFilename = `mulai_${tglMulai}`;
+    } else if (tglAkhir) {
+      periodeText = `Sampai ${tglAkhir}`;
+      datePartFilename = `sampai_${tglAkhir}`;
+    }
 
-  // 3. Kolom Tabel Presensi (Nama Peserta, NIK & Waktu Presensi)
-  rows.push(['No', 'Nama Peserta', 'NIK', 'Tanggal', 'Jam Masuk', 'Jam Keluar', 'Status / Kategori', 'Keterangan']);
+    const meta = {
+      fileName: `Laporan_Presensi_MagangHub_${sanitizeName}_${datePartFilename}.xlsx`,
+      searchKeyword,
+      periodeText,
+      adminName: STATE.currentUser?.nama || STATE.currentUser?.email || 'Admin MagangHub BPS Banjar'
+    };
 
-  // 4. Data Rows
-  dataToExport.forEach((item, index) => {
-    rows.push([
-      index + 1,
-      item.resolvedNama || item.nama || 'Peserta',
-      item.resolvedNik || item.nik || '-',
-      item.resolvedTanggal || item.tanggal || item.date || '-',
-      item.resolvedJamMasuk || item.jam_masuk || item.jamMasuk || '-',
-      item.resolvedJamKeluar || item.jam_keluar || item.jamKeluar || '-',
-      item.status || item.kategori || 'Hadir',
-      item.keterangan || item.alasan || '-'
-    ]);
-  });
-
-  // Konversi array of arrays menjadi Sheet
-  const worksheet = XLSX.utils.aoa_to_sheet(rows);
-
-  // Styling Lebar Kolom (column widths)
-  worksheet['!cols'] = [
-    { wch: 6 },  // No
-    { wch: 28 }, // Nama Peserta
-    { wch: 20 }, // NIK
-    { wch: 15 }, // Tanggal
-    { wch: 14 }, // Jam Masuk
-    { wch: 14 }, // Jam Keluar
-    { wch: 18 }, // Status
-    { wch: 32 }  // Keterangan
-  ];
-
-  // Buat Workbook baru
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, 'Rekap Presensi');
-
-  // Trigger Download File .xlsx
-  const fileName = `Rekap_Presensi_${sanitizeName}_${datePartFilename}.xlsx`;
-  XLSX.writeFile(workbook, fileName);
-
-  showToast(`File Excel berhasil diunduh: ${fileName}`, 'success');
+    // Prioritaskan ExcelJS untuk visual modern bergaris & berwarna elegan
+    if (typeof ExcelJS !== 'undefined') {
+      await generateModernExcelWithExcelJS(dataToExport, meta);
+    } else if (typeof XLSX !== 'undefined') {
+      generateStructuredExcelWithSheetJS(dataToExport, meta);
+    } else {
+      showToast('Library Excel belum siap dimuat.', 'error');
+    }
+  } catch (error) {
+    console.error('Error saat exportRekapToExcel:', error);
+    showToast(`Gagal mengekspor laporan: ${error.message}`, 'error');
+  } finally {
+    if (btnUnduhExcel) {
+      btnUnduhExcel.disabled = false;
+      btnUnduhExcel.innerHTML = originalBtnHtml;
+    }
+  }
 }
 
 // ============================================================================
